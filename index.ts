@@ -1,7 +1,10 @@
 import * as Tone from 'tone';
-import { NestedArray, range, flatten, findMax, mod, mapAllf } from './util';
+import * as jsfx from "loov-jsfx";
+import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType } from './util';
 import { random, selectRand, ranif } from './random';
 import { logger } from './logger';
+import { RecursivePartial } from 'tone/build/esm/core/util/Interface';
+import { Instrument } from 'tone/build/esm/instrument/Instrument';
 
 const modNote = (note: number) => mod(note, Note.End);
 
@@ -61,6 +64,27 @@ const NoteName = {
   [Note.B]: "B",
 };
 const MajorNotes = [Note.C, Note.D, Note.E, Note.F, Note.G, Note.A, Note.B];
+
+
+export const noteNumber = (note: Note, octave: number) => {
+  return octave * Note.End + note;
+}
+
+export const noteOctave = (note: number) => {
+  return Math.max(Math.floor(note / Note.End), -1);
+}
+
+export const noteName = (note: number) => {
+  const n = modNote(note);
+  const octave = noteOctave(note);
+  return `${NoteName[n]}${octave}`;
+}
+
+// 周波数からノートに変換
+// C0 == 0
+export const freqToNote = (frequency: number) => {
+  return Math.floor(12 * Math.log2(frequency/440) + noteNumber(Note.A,4));
+}
 
 // コード進行ランダム生成
 export const makeRandomProgression = (length: number) => {
@@ -151,28 +175,38 @@ export const makeSequence = (
 // Tone.jsのイベント生成
 export const makeToneSequence = (
   sequence: NestedArray<number>[],
-  synth: Tone.PolySynth,
+  synth: Instrument<any>,
   barTime: Tone.Unit.Time = "1n",  // 一小節の長さ
 ) => {
   return new Tone.Sequence<number | null>((time, note) => {
     if (note !== null) {
-      const n = modNote(note) as Note;
-      const octave = Math.max(Math.floor(note / Note.End), 1);
-      const noteName = `${NoteName[n]}${octave}`;
-      // logger.log(noteName)
+      const name = noteName(note);
       const scheduleTime = Tone.Transport.seconds + Math.max(0, time - Tone.Transport.immediate());
-      synth.triggerAttackRelease(noteName, random.float(0.05, 0.1), scheduleTime, random.float(0.5, 1));
+      synth.triggerAttackRelease(name, random.float(0.05, 0.1), scheduleTime, random.float(0.5, 1));
     }
   }, sequence, barTime);
 };
 
+type OmniOscillatorSynthOptions = PropType<RecursivePartial<Tone.SynthOptions>, "oscillator">;
+type OmniOscillatorSynthTypes = PropType<OmniOscillatorSynthOptions, "type"> ;
+
 // シンセ生成
-export const randomSynth = () => {
-  const synth = new Tone.PolySynth().toDestination();
+export const randomSynth = (params: (OmniOscillatorSynthTypes | Object | Function)[]) => {
+  const param = selectRand(params);
+  if(typeof param === "object" || typeof param === "function"){
+      return createJsfxSynth(param);
+  }
+  return createRandomPolySynth(param);
+};
+
+export const createRandomPolySynth = (
+  type: OmniOscillatorSynthTypes =  selectRand(["sawtooth", "fmsawtooth", "amsawtooth", "square", "fatsquare", "fmtriangle"])
+) => {
+  const synth = new Tone.PolySynth();
   synth.sync();
   synth.set({
     oscillator: {
-      type: selectRand([/*"sine", "fmsine", "amsine", */"sawtooth", "fmsawtooth", "amsawtooth", "square", "fatsquare", "fmtriangle"])
+      type: type as any
     },
     envelope: {
       attack: random.float(0, 0.05),
@@ -183,36 +217,78 @@ export const randomSynth = () => {
   });
   logger.log(synth.get().oscillator.type, synth.get().envelope)
   return synth;
-};
+}
+
+export const createJsfxSynth = (param: any) => {
+  if(typeof param === "function"){
+    random.patch();
+    param = param();
+    random.unpatch();
+  }
+  logger.log(param);
+  const buffer = jsfx.AudioBuffer(Tone.getContext(), param) as AudioBuffer;
+  const synth = new Tone.Sampler({
+    urls: {
+      [noteName(freqToNote(param.Frequency.Start))]: buffer,
+    }
+  });
+  synth.sync();
+  return synth;
+}
 
 // BGM再生
 let seq: Tone.Sequence<number | null>[] = [];
-let synths: Tone.PolySynth[] = [];
-export const playBGM = () => {
-  seq.forEach(e => { e.cancel(); e.clear(); e.stop(); e.dispose(); });
+let synths: Instrument<any>[] = [];
+export const playBGM = (
+  length: number = 4,
+  accompanimentNumber: number = 2,
+  baseOctave: number = 4,
+  noteOffsetRandomness: number = 0,
+) => {
+  seq.forEach(e => { e.dispose(); });
   seq = [];
   synths.forEach(e => { e.dispose(); });
   synths = [];
   Tone.Transport.stop();
 
-  // seq.push(makeSequence(synth, 4, 8, "1n", 0.4, 0.2, null, 2).start(0));
-
-  const offset = random.int(-3, 3);
+  const offset = random.int(-noteOffsetRandomness, noteOffsetRandomness);
+  const synthPrams = [
+    "sawtooth",
+    "fmsawtooth",
+    "amsawtooth",
+    "square",
+    "fatsquare",
+    "fmtriangle",
+    jsfx.Preset.Laser,
+    jsfx.Preset.Select,
+    jsfx.Preset.Hit,
+    jsfx.Preset.Hit,
+  ];
 
   let baseSequence: NestedArray<number>[];
   {
-    const synth = randomSynth();
+    const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
-    baseSequence = makeSequence(selectRandomScale(), 8, 8, null, 0.01, 4, offset);
+    baseSequence = makeSequence(selectRandomScale(), length, selectRand([8,16]), null, 0.01, baseOctave, offset);
     seq.push(makeToneSequence(baseSequence, synth).start(0));
   }
 
   const progression = makeProgressionFromSequence(baseSequence);
-  range(2).forEach(() => {
-    const synth = randomSynth();
+  range(accompanimentNumber).forEach(() => {
+    const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
-    seq.push(makeToneSequence(makeSequence(progression, 4, selectRand([8,16]), null, 0.01, 4, 0), synth).start(0));
+    seq.push(makeToneSequence(makeSequence(progression, selectRand([4, 8].filter(e=>e <= length)), selectRand([8,16]), null, 0.01, baseOctave, 0), synth).start(0));
   })
   Tone.Transport.start();
   Tone.Transport.bpm.value = 120;
 };
+
+export const createJsfxSound = (param: any) => {
+  if(typeof param === "function"){
+    random.patch();
+    param = param();
+    random.unpatch();
+  }
+  const buffer = jsfx.AudioBuffer(Tone.getContext(), param) as AudioBuffer;
+  return new Tone.Player(buffer);
+}
