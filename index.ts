@@ -1,6 +1,7 @@
 import * as Tone from 'tone';
 import { NestedArray, range, flatten, findMax, mod, mapAllf } from './util';
 import { random, selectRand, ranif } from './random';
+import { logger } from './logger';
 
 const modNote = (note: number) => mod(note, Note.End);
 
@@ -103,7 +104,7 @@ export const makeSubNotes = (
     range(length)
       .map(() => range(progressionDivide))
       .map((e, i) => e.map((s, j) => progressionOrScale[(i * progressionDivide + j) % progressionOrScale.length]))
-      .map(e => e.map(s => { console.log(`${NoteName[s.base]} ${s.chord}`); return s; }))
+      .map(e => e.map(s => { logger.log(`${NoteName[s.base]} ${s.chord}`); return s; }))
       .map(e => e.map(({ base, chord }) => chord.map(c => base + c)));
   return subNotes;
 };
@@ -143,7 +144,7 @@ export const makeSequence = (
       .map(mapAllf(n => n + (baseOctave * Note.End)))
       .map(mapAllf(n => ranif(skipRatio) ? null : n));
 
-  console.log(sequence);
+  logger.log(sequence);
   return sequence;
 };
 
@@ -158,7 +159,7 @@ export const makeToneSequence = (
       const n = modNote(note) as Note;
       const octave = Math.max(Math.floor(note / Note.End), 1);
       const noteName = `${NoteName[n]}${octave}`;
-      // console.log(noteName)
+      // logger.log(noteName)
       const scheduleTime = Tone.Transport.seconds + Math.max(0, time - Tone.Transport.immediate());
       synth.triggerAttackRelease(noteName, random.float(0.05, 0.1), scheduleTime, random.float(0.5, 1));
     }
@@ -180,7 +181,7 @@ export const randomSynth = () => {
       release: random.float(0, 0.5)
     }
   });
-  console.log(synth.get().oscillator.type, synth.get().envelope)
+  logger.log(synth.get().oscillator.type, synth.get().envelope)
   return synth;
 };
 

@@ -2,6 +2,7 @@ import * as jsfx from "loov-jsfx";
 import * as Tone from 'tone';
 import { setSeed } from './random';
 import { playBGM } from './index';
+import { logger } from './logger';
 
 const library = {
   // "select": {"Volume":{"Sustain":0.1,"Decay":0.15,"Punch":0.55}},
@@ -11,8 +12,9 @@ const library = {
   "select": jsfx.Preset.Select
 };
 
-console.log(Tone.Envelope.getDefaults())
-console.log(Tone.Sequence.getDefaults())
+logger.set(logger.LEVEL.FULL);
+logger.log(Tone.Envelope.getDefaults())
+logger.log(Tone.Sequence.getDefaults())
 
 const synth = new Tone.PolySynth().toDestination();
 synth.set({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0 } });
