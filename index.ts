@@ -1,57 +1,7 @@
 import * as jsfx from "loov-jsfx";
 import * as Tone from 'tone';
-import random from 'random';
-import seedrandom from 'seedrandom';
-import { isArray } from "tone";
-
-type NestedArray<T> = (T | NestedArray<T>)[];
-
-const sleep = (msec: number) => new Promise(resolve => setTimeout(resolve, msec));
-const ranif = (p: number) => random.float() < p;
-const selectRand = <T>(ary: T[]) => ary[random.int(0, ary.length - 1)];
-const range = (len: number): undefined[] => [...Array(len)];
-const mapAll = <T, R>(ary: NestedArray<T>, fn: (x: T) => R): NestedArray<R> => ary.map(e => isArray(e) ? mapAll<T, R>(e, fn) : fn(e));
-const mapAllf = <T, R>(fn: (x: T) => R) => (e: NestedArray<T>) => mapAll(e, fn);
-const mod = (x: number, m: number) => x < 0 ? mod(x + m, m) : x % m;
-const flatten = <T>(ary: NestedArray<T>) => [].concat(...[ary]) as T[];
-const findMax = <T>(fn: (a: T, b: T) => boolean, ary: T[]): [number, T] => {
-  if (ary.length == 0) {
-    throw new Error("invalid array size");
-  }
-
-  let maxI = 0;
-  let max = ary[0];
-  for (let i = 1; i < ary.length; i++) {
-    if (fn(ary[i], max)) {
-      maxI = i;
-      max = ary[i];
-    }
-  }
-  return [maxI, max];
-}
-
-const origRandom = Math.random;
-const setSeed = function me(s: number) {
-  random.use(seedrandom(`${s}`))
-  Math.random = () => random.float();
-  return me;
-};
-
-const library = {
-  // "select": {"Volume":{"Sustain":0.1,"Decay":0.15,"Punch":0.55}},
-  "long": { "Volume": { "Sustain": 0.1, "Decay": 0.5, "Punch": 1 } },
-  "coin": jsfx.Preset.Coin,
-  "explosion": jsfx.Preset.Explosion,
-  "select": jsfx.Preset.Select
-};
-
-window.onload = async () => {
-  initUi();
-}
-
-console.log(Tone.Envelope.getDefaults())
-console.log(Tone.Sequence.getDefaults())
-
+import { NestedArray, range, flatten, findMax, mod, mapAllf } from './util';
+import { random, selectRand, ranif } from './random';
 
 const chords = [
   [0, 4, 7],          // M
@@ -93,8 +43,8 @@ enum Note {
 
   End,
 };
-const majorNotes = [Note.C, Note.D, Note.E, Note.F, Note.G, Note.A, Note.B];
 
+const MajorNotes = [Note.C, Note.D, Note.E, Note.F, Note.G, Note.A, Note.B];
 const NoteName = {
   [Note.C]: "C",
   [Note.Cs]: "C#",
@@ -110,18 +60,18 @@ const NoteName = {
   [Note.B]: "B",
 };
 
-const makeRandomProgression = (length: number) => {
+export const makeRandomProgression = (length: number) => {
   return range(length)
-    .map(() => ({ base: selectRand(majorNotes), chord: selectRand(chords) }));
+    .map(() => ({ base: selectRand(MajorNotes), chord: selectRand(chords) }));
 };
 
-const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => {
+export const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => {
   // シーケンスに含まれるノートからコードを選択
   return sequence
     .map(e => Array.from(new Set(flatten(e).filter(e => e !== null))).sort())
     .map(notes => {
       if (notes.length === 0) {
-        return ({ base: selectRand(majorNotes), chord: selectRand(chords) });
+        return ({ base: selectRand(MajorNotes), chord: selectRand(chords) });
       }
 
       // 各ノートを基準とした場合の全てのコードに対する最大の一致を調べる
@@ -136,11 +86,11 @@ const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => {
     });
 };
 
-const selectRandomScale = () => {
-  return [({ base: selectRand(majorNotes), chord: selectRand(scales) })];
+export const selectRandomScale = () => {
+  return [({ base: selectRand(MajorNotes), chord: selectRand(scales) })];
 };
 
-const makeSubNotes = (
+export const makeSubNotes = (
   progressionOrScale: { base: number, chord: number[] }[],
   length: number = 4,              // 何小節？
 ) => {
@@ -154,8 +104,9 @@ const makeSubNotes = (
   return subNotes;
 };
 
-const makeSequence = (
-  subNotes: number[][][],
+export const makeSequence = (
+  progressionOrScale: { base: number, chord: number[] }[],
+  length: number = 4,
   subdivide: number = 1,          // 何分音符？
   skipRatio: number | null = null,
   noChordRatio: number | null = null,
@@ -164,6 +115,8 @@ const makeSequence = (
 ) => {
   skipRatio = skipRatio !== null ? skipRatio : random.float(0, 0.9);
   noChordRatio = noChordRatio !== null ? noChordRatio : random.float(0, 0.2);
+
+  const subNotes = makeSubNotes(progressionOrScale, length)
 
   // const subNotes = 
   //   range(length)
@@ -189,7 +142,7 @@ const makeSequence = (
   const randomStep = random.normal(0, 0.2);
 
   const sequence =
-    range(subNotes.length)
+    range(length)
       .map(() => range(subdivide))                                                                  // subdivide
       .map((e, i) => e.map((s, j) => subNotes[i][Math.floor((j / subdivide) * subNotes[i].length)]))    // 流し込み
       .map(e => e.map(s => s.sort()))
@@ -209,7 +162,7 @@ const makeSequence = (
   return sequence;
 };
 
-const makeToneSequence = (
+export const makeToneSequence = (
   sequence: NestedArray<number>[],
   synth: Tone.PolySynth,
   barTime: Tone.Unit.Time = "1n",  // 一小節の長さ
@@ -224,14 +177,10 @@ const makeToneSequence = (
       synth.triggerAttackRelease(noteName, random.float(0.05, 0.1), scheduleTime, random.float(0.5, 1));
     }
   }, sequence, barTime);
-}
+};
 
-const synth = new Tone.PolySynth().toDestination();
-synth.set({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.5, release: 0 } });
-const synth2 = new Tone.PolySynth().toDestination();
-synth2.set({ oscillator: { type: "fmsine" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.1 } });
 
-const randomSynth = () => {
+export const randomSynth = () => {
   const synth = new Tone.PolySynth().toDestination();
   synth.sync();
   synth.set({
@@ -247,72 +196,36 @@ const randomSynth = () => {
   });
   console.log(synth.get().oscillator.type, synth.get().envelope)
   return synth;
-}
+};
 
-async function initUi() {
 
-  let buffer: Tone.ToneAudioBuffer;
+let seq: Tone.Sequence<number | null>[] = [];
+let synths: Tone.PolySynth[] = [];
+export const playBGM = () => {
+  seq.forEach(e => { e.cancel(); e.clear(); e.stop(); e.dispose(); });
+  seq = [];
+  synths.forEach(e => { e.dispose(); });
+  synths = [];
+  Tone.Transport.stop();
+
+  // seq.push(makeSequence(synth, 4, 8, "1n", 0.4, 0.2, null, 2).start(0));
+
+  const offset = random.int(-3, 3);
+
+  let baseSequence: NestedArray<number>[];
   {
-    const offline = new Tone.OfflineContext(2, 30, 44100);
-    const synth = new Tone.PolySynth({ context: offline }).toDestination();
-    synth.get().oscillator.type = "amsawtooth";
-    synth.triggerAttackRelease(["C4", "E4", "G4"], "16n");
-    // const osc = new Tone.Oscillator({context: offline, frequency: 440, type: "sawtooth"}).toDestination();
-    // osc.start().stop("16n");
-    buffer = await offline.render();
+    const synth = randomSynth();
+    synths.push(synth);
+    baseSequence = makeSequence(selectRandomScale(), 8, 8, null, 0.01, 4, offset);
+    seq.push(makeToneSequence(baseSequence, synth).start(0));
   }
 
-  const keys = new Tone.Players({
-    0: buffer
-  }).toDestination();
-
-  const change = <HTMLButtonElement>document.getElementById("change");
-  const seed = <HTMLInputElement>document.getElementById("seed");
-  const set = <HTMLButtonElement>document.getElementById("set");
-  change.onclick = () => {
-    seed.value = Math.floor(Math.random() * 9999999).toString();
-    play();
-  };
-
-  let seq: Tone.Sequence<number | null>[] = [];
-  let synths: Tone.PolySynth[] = [];
-  const play = () => {
-    Tone.getContext().resume();
-    random.use(seedrandom(seed.value));
-    // setSeed(Number(seed.value));
-    // const sfx = jsfx.Live(library);
-    // sfx.select();
-
-    // synth.triggerAttackRelease("C4", "8n");
-    // keys.player(`${0}`).start();
-
-
-
-    seq.forEach(e => { e.cancel(); e.clear(); e.stop(); e.dispose(); });
-    seq = [];
-    synths.forEach(e => { e.dispose(); });
-    synths = [];
-    Tone.Transport.stop();
-
-    // seq.push(makeSequence(synth, 4, 8, "1n", 0.4, 0.2, null, 2).start(0));
-
-    let baseSequence: NestedArray<number>[];
-    {
-      const synth = randomSynth();
-      synths.push(synth);
-      baseSequence = makeSequence(makeSubNotes(selectRandomScale(), 4), 8, null, 0.01, 4, 0);
-      seq.push(makeToneSequence(baseSequence, synth).start(0));
-    }
-
-    const progression = makeProgressionFromSequence(baseSequence);
-    const offset = random.int(0, 0);
-    range(2).forEach(() => {
-      const synth = randomSynth();
-      synths.push(synth);
-      seq.push(makeToneSequence(makeSequence(makeSubNotes(progression, 4), 8, null, 0.01, 4, offset), synth).start(0));
-    })
-    Tone.Transport.start();
-    Tone.Transport.bpm.value = 120;
-  };
-  set.onclick = play;
-}
+  const progression = makeProgressionFromSequence(baseSequence);
+  range(2).forEach(() => {
+    const synth = randomSynth();
+    synths.push(synth);
+    seq.push(makeToneSequence(makeSequence(progression, 4, selectRand([8,16]), null, 0.01, 4, 0), synth).start(0));
+  })
+  Tone.Transport.start();
+  Tone.Transport.bpm.value = 120;
+};
