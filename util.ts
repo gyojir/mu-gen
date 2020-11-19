@@ -25,6 +25,17 @@ export const findMax = <T>(fn: (a: T, b: T) => boolean, ary: T[]): [number, T] =
   return [maxI, max];
 }
 
+export const getHashFromString = (str: string) => {
+  let hash = 0;
+  const len = str.length;
+  for (let i = 0; i < len; i++) {
+    const chr = str.charCodeAt(i);
+    hash = (hash << 5) - hash + chr;
+    hash |= 0;
+  }
+  return hash;
+}
+
 // export const origRandom = Math.random;
 // export const setSeed = function me(s: number) {
 //   random.use(seedrandom(`${s}`))

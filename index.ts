@@ -1,10 +1,15 @@
 import * as Tone from 'tone';
 import * as jsfx from "loov-jsfx";
-import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType } from './util';
+import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType, getHashFromString } from './util';
 import { random, selectRand, ranif } from './random';
 import { logger } from './logger';
 import { RecursivePartial } from 'tone/build/esm/core/util/Interface';
 import { Instrument } from 'tone/build/esm/instrument/Instrument';
+
+let _seed = 0;
+export const setSeed = (seed: number) => {
+  _seed = seed;
+}
 
 const modNote = (note: number) => mod(note, Note.End);
 
@@ -65,6 +70,16 @@ const NoteName = {
 };
 const MajorNotes = [Note.C, Note.D, Note.E, Note.F, Note.G, Note.A, Note.B];
 
+export enum Presets {
+  Coin = jsfx.Preset.Coin,
+  Laser = jsfx.Preset.Laser,
+  Explosion = jsfx.Preset.Explosion,
+  Powerup = jsfx.Preset.Powerup,
+  Hit = jsfx.Preset.Hit,
+  Jump = jsfx.Preset.Jump,
+  Select = jsfx.Preset.Select,
+  Lucky = jsfx.Preset.Lucky,
+};
 
 export const noteNumber = (note: Note, octave: number) => {
   return octave * Note.End + note;
@@ -220,12 +235,12 @@ export const createRandomPolySynth = (
 }
 
 export const createJsfxSynth = (param: any) => {
+  logger.log(param);
   if(typeof param === "function"){
     random.patch();
     param = param();
     random.unpatch();
   }
-  logger.log(param);
   const buffer = jsfx.AudioBuffer(Tone.getContext(), param) as AudioBuffer;
   const synth = new Tone.Sampler({
     urls: {
@@ -243,13 +258,11 @@ export const playBGM = (
   length: number = 4,
   accompanimentNumber: number = 2,
   baseOctave: number = 4,
+  bpm: number = 120,
   noteOffsetRandomness: number = 0,
 ) => {
-  seq.forEach(e => { e.dispose(); });
-  seq = [];
-  synths.forEach(e => { e.dispose(); });
-  synths = [];
-  Tone.Transport.stop();
+  stopBGM();
+  random.setSeed(_seed);
 
   const offset = random.int(-noteOffsetRandomness, noteOffsetRandomness);
   const synthPrams = [
@@ -259,10 +272,11 @@ export const playBGM = (
     "square",
     "fatsquare",
     "fmtriangle",
-    jsfx.Preset.Laser,
-    jsfx.Preset.Select,
-    jsfx.Preset.Hit,
-    jsfx.Preset.Hit,
+    Presets.Laser,
+    Presets.Select,
+    Presets.Explosion,
+    Presets.Hit,
+    Presets.Hit,
   ];
 
   let baseSequence: NestedArray<number>[];
@@ -279,8 +293,9 @@ export const playBGM = (
     synths.push(synth);
     seq.push(makeToneSequence(makeSequence(progression, selectRand([4, 8].filter(e=>e <= length)), selectRand([8,16]), null, 0.01, baseOctave, 0), synth).start(0));
   })
+  Tone.Transport.stop();
   Tone.Transport.start();
-  Tone.Transport.bpm.value = 120;
+  Tone.Transport.bpm.value = bpm;
 };
 
 export const createJsfxSound = (param: any) => {
@@ -289,6 +304,37 @@ export const createJsfxSound = (param: any) => {
     param = param();
     random.unpatch();
   }
+  logger.log(param)
   const buffer = jsfx.AudioBuffer(Tone.getContext(), param) as AudioBuffer;
   return new Tone.Player(buffer);
+}
+
+let sounds: { [x: string]: Tone.Player } = {};
+export function playSE(
+  params: Presets | Object,
+  name: string = "0",
+  volume: number = null
+) {
+  if (sounds[name] !== undefined) {
+    volume !== null && (sounds[name].volume = volume as any);
+    sounds[name].start();
+    return;
+  }
+  random.setSeed(_seed + getHashFromString(name));
+  sounds[name] = createJsfxSound(params).toDestination();
+
+  volume !== null && (sounds[name].volume = volume as any);
+  sounds[name].start();
+}
+
+export const stopBGM = () => {
+  seq.forEach(e => { e.dispose(); });
+  seq = [];
+  synths.forEach(e => { e.dispose(); });
+  synths = [];
+}
+
+export const resetSE = () => {
+  Object.values(sounds).forEach(e=>e.dispose());
+  sounds = {};
 }
