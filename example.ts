@@ -47,7 +47,6 @@ async function initUi() {
   const play = () => {
     Tone.getContext().resume();
     setSeed(Number(seed.value));
-    // setSeed(Number(seed.value));
     // const sfx = jsfx.Live(library);
     // sfx.select();
 

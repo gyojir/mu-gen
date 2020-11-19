@@ -2,6 +2,8 @@ import * as Tone from 'tone';
 import { NestedArray, range, flatten, findMax, mod, mapAllf } from './util';
 import { random, selectRand, ranif } from './random';
 
+const modNote = (note: number) => mod(note, Note.End);
+
 const chords = [
   [0, 4, 7],          // M
   [0, 3, 7],          // m
@@ -75,9 +77,9 @@ export const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => 
 
       // 各ノートを基準とした場合の全てのコードに対する最大の一致を調べる
       const candidates = notes.map(note => {
-        const set = new Set(notes.map(n => n - note));                                        // 自身でオフセット
-        const intersections = chords.map(chord => new Set(chord.filter(e => (set.has(e)))));  // 積集合
-        let [maxI, max] = findMax((a, b) => a.size > b.size, intersections)                    // 一致数の最大値を調べる
+        const set = new Set(notes.map(n => modNote(n - note)));                                         // 自身でオフセット
+        const intersections = chords.map(chord => new Set(chord.filter(e => (set.has(modNote(e))))));   // 積集合
+        let [maxI, max] = findMax((a, b) => a.size > b.size, intersections)                             // 一致数の最大値を調べる
         return ({ match: max.size, base: note % Note.End, chord: chords[maxI] });
       });
       let [maxI, max] = findMax((a, b) => a.match > b.match, candidates);
@@ -85,10 +87,10 @@ export const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => 
     });
 };
 
+// スケール選択
 export const selectRandomScale = () => {
   return [({ base: selectRand(MajorNotes), chord: selectRand(scales) })];
 };
-
 
 // 各小節ごとの使用ノート
 export const makeSubNotes = (
@@ -116,31 +118,10 @@ export const makeSequence = (
   offset: number = 0                    // 全ノートにかけるオフセット
 ) => {
   skipRatio = skipRatio !== null ? skipRatio : random.float(0, 0.9);
-  noChordRatio = noChordRatio !== null ? noChordRatio : random.float(0, 0.2);
-
-  // const subNotes = 
-  //   range(length)
-  //   .map(()=> notes.filter(()=> ranif(subNoteRatio)))
-  //   .map(e => e.length === 0 ? [selectRand(notes)] : e);
-
-  // const progressionDivide = Math.max(1, Math.floor(progressionOrScale.length / length));
-  // const subNotes = 
-  //   range(length * progressionDivide)
-  //   .map((e,i)=> progressionOrScale[i % progressionOrScale.length])
-  //   .map(e=> {console.log(`${NoteName[e.base]} ${e.chord}`); return e;})
-  //   .map(({base,chord}) => chord.map(c=>base+c));
-  // const sequence =
-  //   range(length)
-  //   .map(() => range(subdivide))                                                                // subdivide
-  //   .map((e,i) => e.map((s,j) => subNotes[Math.floor((i + (j/subdivide)) * progressionDivide)]))  // 流し込み
-  //   .map((e,i) => e.map((s,j) => selectRand(s)))                                                // 流し込み
-  //   .map(mapAllf(n => ranif(noChordRatio) ? n + random.int(-2,2) : n))                          // コード外
-  //   .map(mapAllf(n => n + offset))                                                              // オフセット
-  //   .map(mapAllf(n => n + (baseOctave * Note.End)))
-  //   .map(mapAllf(n => ranif(skipRatio) ? null : n));                                          
+  noChordRatio = noChordRatio !== null ? noChordRatio : random.float(0, 0.2);                            
 
   const subNotes = makeSubNotes(progressionOrScale, length);
-  
+
   let current = random.float(0, 1);
   const randomStep = random.normal(0, 0.2);
 
@@ -165,6 +146,7 @@ export const makeSequence = (
   return sequence;
 };
 
+// Tone.jsのイベント生成
 export const makeToneSequence = (
   sequence: NestedArray<number>[],
   synth: Tone.PolySynth,
@@ -172,7 +154,7 @@ export const makeToneSequence = (
 ) => {
   return new Tone.Sequence<number | null>((time, note) => {
     if (note !== null) {
-      const n = mod(note, Note.End) as Note;
+      const n = modNote(note) as Note;
       const octave = Math.max(Math.floor(note / Note.End), 1);
       const noteName = `${NoteName[n]}${octave}`;
       // console.log(noteName)
@@ -182,7 +164,7 @@ export const makeToneSequence = (
   }, sequence, barTime);
 };
 
-
+// シンセ生成
 export const randomSynth = () => {
   const synth = new Tone.PolySynth().toDestination();
   synth.sync();
@@ -201,7 +183,7 @@ export const randomSynth = () => {
   return synth;
 };
 
-
+// BGM再生
 let seq: Tone.Sequence<number | null>[] = [];
 let synths: Tone.PolySynth[] = [];
 export const playBGM = () => {
