@@ -291,7 +291,7 @@ export const playBGM = (
   range(accompanimentNumber).forEach(() => {
     const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
-    seq.push(makeToneSequence(makeSequence(progression, selectRand([4, 8].filter(e=>e <= length)), selectRand([8,16]), null, 0.01, baseOctave, 0), synth).start(0));
+    seq.push(makeToneSequence(makeSequence(progression, selectRand([2,4,8].filter(e=>e <= length)), selectRand([4,8,16]), null, 0.01, baseOctave, 0), synth).start(0));
   })
   Tone.Transport.stop();
   Tone.Transport.start();
