@@ -15,7 +15,7 @@ async function initUi() {
     Tone.getContext().resume();
     setSeed(Number(seed.value));
 
-    playBGM(8,2);    
+    playBGM(8,3);    
   };
   
   playBtn.onclick = play;

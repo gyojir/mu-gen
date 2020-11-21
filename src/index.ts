@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import * as jsfx from "loov-jsfx";
-import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType, getHashFromString } from './util';
+import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType, getHashFromString, swapToCompress, thinOut, loopShift } from './util';
 import { random } from './random';
 import { logger } from './logger';
 import { RecursivePartial } from 'tone/build/esm/core/util/Interface';
@@ -132,7 +132,7 @@ export const makeProgressionFromSequence = (sequence: NestedArray<number>[]) => 
         const set = new Set(notes.map(n => modNote(n - note)));                                         // 自身でオフセット
         const intersections = chords.map(chord => new Set(chord.filter(e => (set.has(modNote(e))))));   // 積集合
         let [maxI, max] = findMax((a, b) => a.size > b.size, intersections)                             // 一致数の最大値を調べる
-        return ({ match: max.size, base: note % Note.End, chord: chords[maxI] });
+        return ({ match: max.size, base: modNote(note), chord: chords[maxI] });
       });
       let [maxI, max] = findMax((a, b) => a.match > b.match, candidates);
       return ({ match: max.match, base: max.base, chord: max.chord });
@@ -154,7 +154,7 @@ export const makeSubNotes = (
     range(length)
       .map(() => range(progressionDivide))
       .map((e, i) => e.map((s, j) => progressionOrScale[(i * progressionDivide + j) % progressionOrScale.length]))
-      .map(e => e.map(s => { logger.log(`${NoteName[s.base]} ${s.chord}`); return s; }))
+      .map(e => { logger.log(e.map(s => `${NoteName[s.base]} ${s.chord}`)); return e; })
       .map(e => e.map(({ base, chord }) => chord.map(c => base + c)));
   return subNotes;
 };
@@ -302,8 +302,13 @@ export const playBGM = (
   range(accompanimentNumber).forEach(() => {
     const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
-    seq.push(makeToneSequence(makeSequence(progression, random.select([2,4,8].filter(e=>e <= length)), random.select([4,8,16]), null, 0.01, baseOctave, 0), synth).start(0));
-  })
+    const len = random.select([2,4,8].filter(e=>e <= length));
+    // const prog = [...progression].splice(0,len);
+    // const pro = swapToCompress(progression, len);
+    // const prog = thinOut(progression, len);
+    const prog = thinOut(loopShift(progression, random.int(0,Math.max(0,length-len-1))), len);
+    seq.push(makeToneSequence(makeSequence(prog, len, random.select([4,8,16]), null, 0.01, baseOctave, 0), synth).start(0));
+  });
   Tone.Transport.stop();
   Tone.Transport.start();
   Tone.Transport.bpm.value = bpm;
