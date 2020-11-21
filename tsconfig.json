@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "outDir": "dist/",
+    "declaration": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "allowSyntheticDefaultImports": true,
+    "module": "commonjs",
+    "target": "es5",
+    "lib": ["es6", "ES2017.Object", "dom"]
+  },
+  "include": [
+    "src/**/*"
+  ]
+}

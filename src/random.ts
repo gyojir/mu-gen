@@ -1,6 +1,4 @@
-// @ts-ignore workaround
-import random from 'random';
-import * as randomTypes from 'random';
+import _random from 'random';
 
 class RandomImpl {
   x: number = 0;
@@ -52,10 +50,14 @@ const setSeed = (seed: number) => {
   randImpl.setSeed(seed);
   random.use(() => randImpl.get());
 }
+const ranif = (p: number) => random.float() < p;
+const selectRand = <T>(ary: T[]) => ary[random.int(0, ary.length - 1)];
+
+export const random = _random as typeof _random & {
+  setSeed: typeof setSeed,
+  ranif: typeof ranif,
+  select: typeof selectRand
+};
 random.setSeed = setSeed;
-
-export const ranif = (p: number) => random.float() < p;
-export const selectRand = <T>(ary: T[]) => ary[random.int(0, ary.length - 1)];
-
-const _random: typeof randomTypes & { setSeed: typeof setSeed } = random;
-export { _random as random };
+random.ranif = ranif;
+random.select = selectRand;

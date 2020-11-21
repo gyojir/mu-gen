@@ -1,13 +1,11 @@
-import * as jsfx from "loov-jsfx";
 import * as Tone from 'tone';
-import { random } from './random';
-import { playBGM, setSeed, createJsfxSynth, createJsfxSound, playSE, Presets, resetSE, stopBGM } from './index';
-import { logger } from './logger';
+import { playBGM, setSeed, playSE, Presets, resetSE, stopBGM } from '../index';
+import { logger } from '../logger';
 
 logger.set(logger.LEVEL.FULL);
 
 async function initUi() {
-  const change = <HTMLButtonElement>document.getElementById("random");
+  const rand = <HTMLButtonElement>document.getElementById("random");
   const seed = <HTMLInputElement>document.getElementById("seed");
   const playBtn = <HTMLButtonElement>document.getElementById("play");
   const select = <HTMLButtonElement>document.getElementById("select");
@@ -22,7 +20,7 @@ async function initUi() {
   
   playBtn.onclick = play;
   
-  change.onclick = () => {
+  rand.onclick = () => {
     seed.value = Math.floor(Math.random() * 9999999).toString();
     play();
   };
