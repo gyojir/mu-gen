@@ -1,6 +1,6 @@
 import * as Tone from 'tone';
 import * as jsfx from "loov-jsfx";
-import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType, getHashFromString, swapToCompress, thinOut, loopShift } from './util';
+import { NestedArray, range, flatten, findMax, mod, mapAllf, PropType, getHashFromString, swapToCompress, thinOut, loopShift, sleep } from './util';
 import { random } from './random';
 import { logger } from './logger';
 import { RecursivePartial } from 'tone/build/esm/core/util/Interface';
@@ -8,6 +8,9 @@ import { Instrument } from 'tone/build/esm/instrument/Instrument';
 import { TimeBaseUnit } from 'tone/build/esm/core/type/TimeBase';
 
 const DefaultBPM = 120;
+
+export const destinationNode = new Tone.Channel();
+destinationNode.toDestination();
 
 let _seed = 0;
 export const setSeed = (seed: number) => {
@@ -300,7 +303,7 @@ export const createBGM = (
 
   let baseSequence: NestedArray<number>[];
   {
-    const synth = randomSynth(synthPrams).toDestination();
+    const synth = randomSynth(synthPrams).connect(destinationNode);
     synths.push(synth);
     baseSequence = makeSequence(selectRandomScale(), length, random.select([8,16]), null, 0.01, baseOctave, offset);
     bgms[key].push(makeToneSequence(baseSequence, synth, barTime));
@@ -308,7 +311,7 @@ export const createBGM = (
 
   const progression = makeProgressionFromSequence(baseSequence);
   range(accompanimentNumber).forEach(() => {
-    const synth = randomSynth(synthPrams).toDestination();
+    const synth = randomSynth(synthPrams).connect(destinationNode);
     synths.push(synth);
     const len = random.select([2,4,8].filter(e=>e <= length));
     const prog = thinOut(loopShift(progression, random.int(0,Math.max(0,length-len-1))), len);
@@ -387,4 +390,45 @@ export const resetBGM = () => {
 export const resetSE = () => {
   Object.values(sounds).forEach(e=>e.dispose());
   sounds = {};
+}
+
+// 録音
+export const recordBGM = async (key: string, loop: number, listen: boolean = true) => {
+  const bgm = bgms[key];
+  if(bgm === undefined){
+    return;
+  }
+
+  stopAllBGM();
+  
+  logger.log("recording start!");
+
+  const recorder = new Tone.Recorder();
+  destinationNode.connect(recorder);
+  if(!listen) {
+    destinationNode.disconnect(Tone.Destination);
+  }
+
+  const len = bgm[0].events.length * loop;
+  const subdivision = bgm[0].subdivision;
+  bgm.forEach(e => e.loop = Math.floor(len / e.events.length));
+
+  recorder.start();
+  playBGM(key);
+  for (let i = 0; i < len; i++){
+    logger.log(`progress: ${Math.floor(100 * i / len)}%`);
+    await sleep(subdivision * 1000);
+  }
+  stopBGM(key);
+  await sleep(Tone.getContext().lookAhead * 1000);
+
+  const recording = await recorder.stop();  
+  logger.log("recording finish!");
+
+  destinationNode.disconnect(recorder);
+  if(!listen) {
+    destinationNode.toDestination();
+  }
+
+  return recording;
 }
