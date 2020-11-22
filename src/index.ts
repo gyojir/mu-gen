@@ -314,7 +314,7 @@ export const createBGM = (
     const synth = randomSynth(synthPrams).connect(destinationNode);
     synths.push(synth);
     const len = random.select([2,4,8].filter(e=>e <= length));
-    const prog = thinOut(loopShift(progression, random.int(0,Math.max(0,length-len-1))), len);
+    const prog = [...progression].splice(random.int(0, Math.max(0, (length/len) - 1)) * len, len);
     bgms[key].push(makeToneSequence(makeSequence(prog, len, random.select([4,8,16]), null, 0.01, baseOctave, 0), synth, barTime));
   });
 
