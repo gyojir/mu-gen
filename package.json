@@ -2,6 +2,7 @@
   "name": "mu-gen",
   "version": "1.0.0",
   "description": "random music generator",
+  "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "clean": "rimraf -rf dist",
