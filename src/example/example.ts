@@ -17,6 +17,7 @@ async function initUi() {
 
   const create = () => {
     setSeed(Number(seed.value));
+    console.log(seed.value);
     createBGM("0", 8,3);
   }
   
@@ -43,6 +44,7 @@ async function initUi() {
   }
 
   seed.onblur = () => {
+    resetBGM();
     create();
   }
 
