@@ -5,6 +5,9 @@ import { random } from './random';
 import { logger } from './logger';
 import { RecursivePartial } from 'tone/build/esm/core/util/Interface';
 import { Instrument } from 'tone/build/esm/instrument/Instrument';
+import { TimeBaseUnit } from 'tone/build/esm/core/type/TimeBase';
+
+const DefaultBPM = 120;
 
 let _seed = 0;
 export const setSeed = (seed: number) => {
@@ -210,7 +213,7 @@ export const makeToneSequence = (
       const scheduleTime = Tone.Transport.seconds + Math.max(0, time - Tone.Transport.immediate());
       synth.triggerAttackRelease(name, random.float(0.05, 0.1), scheduleTime, random.float(0.5, 1));
     }
-  }, sequence, barTime);
+  }, sequence, Tone.Time(barTime).toSeconds());
 };
 
 type OmniOscillatorSynthOptions = PropType<RecursivePartial<Tone.SynthOptions>, "oscillator">;
@@ -225,6 +228,7 @@ export const randomSynth = (params: (OmniOscillatorSynthTypes | Object | Functio
   return createRandomPolySynth(param);
 };
 
+// Polyシンセ生成
 export const createRandomPolySynth = (
   type: OmniOscillatorSynthTypes =  random.select(["sawtooth", "fmsawtooth", "amsawtooth", "square", "fatsquare", "fmtriangle"])
 ) => {
@@ -245,6 +249,7 @@ export const createRandomPolySynth = (
   return synth;
 }
 
+// jsfxシンセ生成
 export const createJsfxSynth = (param: any) => {
   logger.log(param);
   if(typeof param === "function"){
@@ -262,20 +267,21 @@ export const createJsfxSynth = (param: any) => {
   return synth;
 }
 
-// BGM再生
-let seq: Tone.Sequence<number | null>[] = [];
+// BGM生成
+let bgms: { [key: string]: Tone.Sequence<number | null>[]} = {};
 let synths: Instrument<any>[] = [];
-export const playBGM = (
+export const createBGM = (
+  key: string,
   length: number = 4,
   accompanimentNumber: number = 2,
   baseOctave: number = 4,
-  bpm: number = 120,
+  bpm: number = DefaultBPM,
   noteOffsetRandomness: number = 0,
 ) => {
-  stopBGM();
+  bgms[key] = [];
+
   random.setSeed(_seed);
 
-  const offset = random.int(-noteOffsetRandomness, noteOffsetRandomness);
   const synthPrams = [
     "sawtooth",
     "fmsawtooth",
@@ -289,13 +295,15 @@ export const playBGM = (
     presets[Presets.Hit],
     presets[Presets.Hit],
   ];
+  const barTime: Tone.Unit.Time = {"1n" : DefaultBPM / bpm};
+  const offset = random.int(-noteOffsetRandomness, noteOffsetRandomness);
 
   let baseSequence: NestedArray<number>[];
   {
     const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
     baseSequence = makeSequence(selectRandomScale(), length, random.select([8,16]), null, 0.01, baseOctave, offset);
-    seq.push(makeToneSequence(baseSequence, synth).start(0));
+    bgms[key].push(makeToneSequence(baseSequence, synth, barTime));
   }
 
   const progression = makeProgressionFromSequence(baseSequence);
@@ -303,17 +311,36 @@ export const playBGM = (
     const synth = randomSynth(synthPrams).toDestination();
     synths.push(synth);
     const len = random.select([2,4,8].filter(e=>e <= length));
-    // const prog = [...progression].splice(0,len);
-    // const pro = swapToCompress(progression, len);
-    // const prog = thinOut(progression, len);
     const prog = thinOut(loopShift(progression, random.int(0,Math.max(0,length-len-1))), len);
-    seq.push(makeToneSequence(makeSequence(prog, len, random.select([4,8,16]), null, 0.01, baseOctave, 0), synth).start(0));
+    bgms[key].push(makeToneSequence(makeSequence(prog, len, random.select([4,8,16]), null, 0.01, baseOctave, 0), synth, barTime));
   });
-  Tone.Transport.stop();
-  Tone.Transport.start();
-  Tone.Transport.bpm.value = bpm;
+
+  return bgms[key];
 };
 
+// BGM再生
+export const playBGM = (key: string)=>{
+  stopBGM(key);
+
+  const bgm = bgms[key];
+  bgm?.forEach(e => e.start());
+
+  Tone.Transport.start();
+  Tone.Transport.bpm.value = DefaultBPM;
+};
+
+// BGM停止
+export const stopBGM = (key: string) => {
+  const bgm = bgms[key];
+  bgm?.forEach(e => e.stop());
+}
+
+// BGM停止
+export const stopAllBGM = () => {
+  Object.keys(bgms).forEach(key => stopBGM(key));
+}
+
+// jsfxサウンド生成
 export const createJsfxSound = (param: Object | Function) => {
   if(typeof param === "function"){
     random.patch();
@@ -325,32 +352,38 @@ export const createJsfxSound = (param: Object | Function) => {
   return new Tone.Player(buffer);
 }
 
+// SE再生
 let sounds: { [x: string]: Tone.Player } = {};
 export function playSE(
   params: Presets,
-  name: string = "0",
-  volume: number = null
+  volume: number = null,
+  name: string = "",
 ) {
   name = params.toString() + name;
-  if (sounds[name] !== undefined) {
-    volume !== null && (sounds[name].volume = volume as any);
-    sounds[name].start();
+  let sound = sounds[name];
+  if (sound !== undefined) {
+    volume !== null && (sound.volume.value = volume);
+    sound.stop();
+    sound.start();
     return;
   }
   random.setSeed(_seed + getHashFromString(name));
-  sounds[name] = createJsfxSound(presets[params]).toDestination();
+  sound = createJsfxSound(presets[params]).toDestination();
 
-  volume !== null && (sounds[name].volume = volume as any);
-  sounds[name].start();
+  volume !== null && (sound.volume.value = volume);
+  sound.start();
 }
 
-export const stopBGM = () => {
-  seq.forEach(e => { e.dispose(); });
-  seq = [];
+// BGMリセット
+export const resetBGM = () => {
+  Object.values(bgms).forEach(e=>e.forEach(e => e.dispose()));
+  bgms = {};
+  
   synths.forEach(e => { e.dispose(); });
   synths = [];
 }
 
+// SEリセット
 export const resetSE = () => {
   Object.values(sounds).forEach(e=>e.dispose());
   sounds = {};
