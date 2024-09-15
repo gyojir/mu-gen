@@ -48,7 +48,7 @@ class RandomImpl {
 const randImpl = new RandomImpl();
 const setSeed = (seed: number) => {
   randImpl.setSeed(seed);
-  random.use(() => randImpl.get());
+  random.use((() => randImpl.get()) as any);
 }
 const ranif = (p: number) => random.float() < p;
 const selectRand = <T>(ary: T[]) => ary[random.int(0, ary.length - 1)];
